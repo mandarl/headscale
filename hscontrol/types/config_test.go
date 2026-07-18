@@ -352,6 +352,87 @@ func TestReadConfigFromEnv(t *testing.T) {
 	}
 }
 
+func TestDNSChallengeCloudflareConfigFromFile(t *testing.T) {
+	viper.Reset()
+
+	configPath := writeConfigFile(t, `noise:
+  private_key_path: "private_key.pem"
+prefixes:
+  v6: fd7a:115c:a1e0::/48
+  v4: 100.64.0.0/10
+database:
+  type: sqlite3
+server_url: "https://derp.no"
+dns:
+  magic_dns: true
+  base_domain: clients.derp.no
+  override_local_dns: false
+  challenge:
+    cloudflare:
+      api_token: "cf-token"
+      zone: "example.com"
+`)
+
+	require.NoError(t, LoadConfig(configPath, true))
+
+	cfg, err := LoadServerConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, "cf-token", cfg.DNSChallenge.Cloudflare.APIToken)
+	assert.Equal(t, "example.com", cfg.DNSChallenge.Cloudflare.Zone)
+	assert.True(t, cfg.DNSChallenge.Cloudflare.Enabled())
+}
+
+func TestDNSChallengeCloudflareConfigRequiresBothFields(t *testing.T) {
+	viper.Reset()
+
+	configPath := writeConfigFile(t, `noise:
+  private_key_path: "private_key.pem"
+prefixes:
+  v6: fd7a:115c:a1e0::/48
+  v4: 100.64.0.0/10
+database:
+  type: sqlite3
+server_url: "https://derp.no"
+dns:
+  magic_dns: true
+  base_domain: clients.derp.no
+  override_local_dns: false
+  challenge:
+    cloudflare:
+      api_token: "cf-token"
+`)
+
+	require.NoError(t, LoadConfig(configPath, true))
+
+	_, err := LoadServerConfig()
+	require.ErrorIs(t, err, errCloudflareChallengeIncomplete)
+}
+
+func TestDNSChallengeCloudflareIgnoresEnv(t *testing.T) {
+	t.Setenv("HEADSCALE_DNS_CHALLENGE_CLOUDFLARE_API_TOKEN", "env-token")
+	t.Setenv("HEADSCALE_DNS_CHALLENGE_CLOUDFLARE_ZONE", "env-zone.example")
+
+	viper.Reset()
+	require.NoError(t, LoadConfig("testdata/base-domain-not-in-server-url.yaml", true))
+
+	cfg, err := LoadServerConfig()
+	require.NoError(t, err)
+
+	assert.Empty(t, cfg.DNSChallenge.Cloudflare.APIToken)
+	assert.Empty(t, cfg.DNSChallenge.Cloudflare.Zone)
+	assert.False(t, cfg.DNSChallenge.Cloudflare.Enabled())
+}
+
+func writeConfigFile(t *testing.T, content string) string {
+	t.Helper()
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o600))
+
+	return configPath
+}
+
 func TestTLSConfigValidation(t *testing.T) {
 	tmpDir := t.TempDir()
 

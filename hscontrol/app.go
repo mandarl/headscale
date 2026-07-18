@@ -93,6 +93,7 @@ type Headscale struct {
 
 	// Things that generate changes
 	extraRecordMan *dns.ExtraRecordsMan
+	dnsChallenge   dns.ChallengeProvider
 	authProvider   AuthProvider
 	mapBatcher     *mapper.Batcher
 
@@ -137,6 +138,14 @@ func NewHeadscale(cfg *types.Config) (*Headscale, error) {
 		if err != nil {
 			return nil, fmt.Errorf("building trusted_proxies middleware: %w", err)
 		}
+	}
+
+	dnsChallenge, err := dns.NewChallengeProvider(cfg.DNSChallenge)
+	if err != nil && !errors.Is(err, dns.ErrDNSChallengeProviderDisabled) {
+		return nil, fmt.Errorf("initializing dns challenge provider: %w", err)
+	}
+	if err == nil {
+		app.dnsChallenge = dnsChallenge
 	}
 
 	// Initialize ephemeral garbage collector

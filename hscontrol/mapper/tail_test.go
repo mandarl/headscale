@@ -54,6 +54,7 @@ func TestTailNode(t *testing.T) {
 		name       string
 		node       *types.Node
 		dnsConfig  *tailcfg.DNSConfig
+		challenge  types.DNSChallengeConfig
 		baseDomain string
 		want       *tailcfg.Node
 		wantErr    bool
@@ -65,6 +66,7 @@ func TestTailNode(t *testing.T) {
 				Hostinfo:  &tailcfg.Hostinfo{},
 			},
 			dnsConfig:  &tailcfg.DNSConfig{},
+			challenge:  types.DNSChallengeConfig{},
 			baseDomain: "",
 			want: &tailcfg.Node{
 				Name:              "empty",
@@ -117,7 +119,13 @@ func TestTailNode(t *testing.T) {
 				ApprovedRoutes: []netip.Prefix{tsaddr.AllIPv4(), tsaddr.AllIPv6(), netip.MustParsePrefix("192.168.0.0/24")},
 				CreatedAt:      created,
 			},
-			dnsConfig:  &tailcfg.DNSConfig{},
+			dnsConfig: &tailcfg.DNSConfig{},
+			challenge: types.DNSChallengeConfig{
+				Cloudflare: types.CloudflareDNSChallengeConfig{
+					APIToken: "token",
+					Zone:     "example.com",
+				},
+			},
 			baseDomain: "",
 			want: &tailcfg.Node{
 				ID:       0,
@@ -166,6 +174,7 @@ func TestTailNode(t *testing.T) {
 					tailcfg.CapabilityAdmin:           []tailcfg.RawMessage{},
 					tailcfg.CapabilitySSH:             []tailcfg.RawMessage{},
 					tailcfg.CapabilityFileSharing:     []tailcfg.RawMessage{},
+					tailcfg.CapabilityHTTPS:           []tailcfg.RawMessage{},
 					tailcfg.NodeAttrDefaultAutoUpdate: []tailcfg.RawMessage{tailcfg.RawMessage("false")},
 				},
 			},
@@ -178,6 +187,7 @@ func TestTailNode(t *testing.T) {
 				Hostinfo:  &tailcfg.Hostinfo{},
 			},
 			dnsConfig:  &tailcfg.DNSConfig{},
+			challenge:  types.DNSChallengeConfig{},
 			baseDomain: "example.com",
 			want: &tailcfg.Node{
 				// a node name should have a dot appended
@@ -208,6 +218,7 @@ func TestTailNode(t *testing.T) {
 			cfg := &types.Config{
 				BaseDomain:       tt.baseDomain,
 				TailcfgDNSConfig: tt.dnsConfig,
+				DNSChallenge:     tt.challenge,
 				Taildrop:         types.TaildropConfig{Enabled: true},
 			}
 

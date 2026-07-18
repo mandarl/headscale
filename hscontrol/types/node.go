@@ -1203,6 +1203,9 @@ func (nv NodeView) TailNode(
 		tailcfg.CapabilityAdmin: []tailcfg.RawMessage{},
 		tailcfg.CapabilitySSH:   []tailcfg.RawMessage{},
 	}
+	if cfg.DNSChallenge.Cloudflare.Enabled() {
+		capMap[tailcfg.CapabilityHTTPS] = []tailcfg.RawMessage{}
+	}
 
 	if cfg.Taildrop.Enabled {
 		capMap[tailcfg.CapabilityFileSharing] = []tailcfg.RawMessage{}

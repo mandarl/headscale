@@ -178,6 +178,8 @@ require (
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/lib/pq v1.12.3 // indirect
+	github.com/libdns/cloudflare v0.2.2 // indirect
+	github.com/libdns/libdns v1.1.0 // indirect
 	github.com/lithammer/fuzzysearch v1.1.8 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect

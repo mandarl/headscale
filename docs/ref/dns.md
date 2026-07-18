@@ -109,3 +109,19 @@ hostname and port combination "http://hostname-in-magic-dns.myvpn.example.com:30
 
     }
     ```
+
+## ACME DNS-01 for Tailscale HTTPS
+
+Headscale can answer Tailscale's Noise `set-dns` requests for HTTPS certificate issuance by creating ACME TXT records in Cloudflare.
+
+Configure it in the `dns` section of your config file:
+
+```yaml title="config.yaml"
+dns:
+  challenge:
+    cloudflare:
+      api_token: "cloudflare-api-token"
+      zone: "example.com"
+```
+
+When enabled, Headscale only accepts TXT updates for `_acme-challenge.<node-fqdn>` and waits for public DNS propagation before replying to the client.

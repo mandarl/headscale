@@ -356,6 +356,15 @@ dns:
   # Headscale processes this file on each change.
   # extra_records_path: /var/lib/headscale/extra-records.json
 
+  # Optional ACME DNS-01 support for Tailscale HTTPS certificates.
+  # This is used by the Noise /machine/set-dns endpoint.
+  # challenge:
+  #   cloudflare:
+  #     # API token with Zone:Read and Zone.DNS:Write for the selected zone.
+  #     api_token: ""
+  #     # DNS zone managed in Cloudflare, for example "example.com".
+  #     zone: ""
+
 # Unix socket used for the CLI to connect without authentication
 # Note: for production you will want to set this to something like:
 unix_socket: /var/run/headscale/headscale.sock
