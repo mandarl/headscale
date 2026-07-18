@@ -1,0 +1,114 @@
+name: Sync upstream and build
+
+# This repo's `main` is: juanfont/headscale's upstream main, plus a small,
+# fixed commit series on top (currently: the Cloudflare DNS-01 challenge
+# patch cherry-picked from https://github.com/exslim/headscale/tree/feature/set-dns,
+# and this CI workflow). The `upstream-base` tag marks the upstream commit
+# our series was last rebased onto. Every run:
+#   1. Fetches upstream and this repo's own `upstream-base` tag.
+#   2. If upstream/main has moved, `git rebase --onto upstream/main
+#      upstream-base main` replays every commit unique to main (the whole
+#      series, not just one patch commit) onto the new upstream tip.
+#   3. On conflict: fails loudly (GitHub emails on scheduled-workflow
+#      failure by default) instead of silently shipping something broken.
+#      Resolve by hand (checkout main, reproduce the rebase, fix conflicts,
+#      rebase --continue), push main, move the upstream-base tag to the
+#      new upstream tip and push that too; the next scheduled run recovers
+#      from there.
+#   4. On success: force-pushes main, moves upstream-base, builds,
+#      publishes a release.
+#
+# All building happens here on GitHub-hosted runners - never on the
+# resource-constrained gcp host that actually runs headscale. Deploying
+# the resulting binary to gcp is a separate, manual, lightweight step
+# (just downloading this release's asset and restarting the service).
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/juanfont/headscale.git
+          git fetch upstream main --tags
+          git fetch origin refs/tags/upstream-base:refs/tags/upstream-base
+
+      - name: Rebase our commit series onto latest upstream
+        id: rebase
+        run: |
+          set -euo pipefail
+
+          if git merge-base --is-ancestor upstream/main main; then
+            echo "Already up to date with upstream/main, nothing to sync."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! git rebase --onto upstream/main upstream-base main; then
+            echo "::error::Rebasing our commit series (DNS-01 patch + CI workflow) onto new upstream/main hit a conflict. Resolve manually: checkout main, run 'git rebase --onto upstream/main upstream-base main', fix conflicts, 'git rebase --continue', push main, move the upstream-base tag to upstream/main's new tip, push that too."
+            git rebase --abort || true
+            exit 1
+          fi
+
+          git tag -f upstream-base upstream/main
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push updated main and upstream-base tag
+        if: steps.rebase.outputs.changed == 'true'
+        run: |
+          git push origin main --force-with-lease
+          git push origin refs/tags/upstream-base --force
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build and vet whole module (catches test-file breakage too)
+        run: |
+          go build ./...
+          go vet ./...
+
+      - name: Run mapper/types/dns tests (covers the merged conflict areas)
+        run: |
+          go test ./hscontrol/mapper/... ./hscontrol/types/... ./hscontrol/dns/...
+
+      - name: Build headscale binary (linux/amd64, matches gcp host)
+        run: |
+          VERSION=$(git describe --always --tags --dirty)
+          echo "Building version: $VERSION"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildmode=pie \
+            -ldflags "-X main.version=$VERSION" \
+            -o headscale ./cmd/headscale
+          ./headscale version
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="build-$(date -u +%Y%m%d-%H%M%S)-$(git rev-parse --short HEAD)"
+          gh release create "$TAG" headscale \
+            --repo "${{ github.repository }}" \
+            --title "$TAG" \
+            --notes "Automated build: upstream juanfont/headscale main + Cloudflare DNS-01 patch (cherry-picked from exslim/headscale#feature/set-dns). Commit: $(git rev-parse HEAD)"
+          echo "Published release $TAG"
